@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인공지능 테스트</title>
+    <style>
+        /* 전체 페이지 스타일 */
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #ff8a00, #e52e71); /* 그라디언트 배경 */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        /* 타이틀 스타일 */
+        body > div {
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            margin-top: 20px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 버튼 스타일 */
+        button {
+            background-color: #ff3b00;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        button:hover {
+            background-color: #e52e71;
+        }
+
+        /* 웹캠 컨테이너 스타일 */
+        #webcam-container {
+            margin-top: 30px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            background-color: #ffffff;
+        }
+
+        /* 예측 결과 레이블 스타일 */
+        #label-container {
+            margin-top: 20px;
+            font-size: 1.5rem;
+            line-height: 1.6;
+            text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 레이블 개별 항목 스타일 */
+        #label-container div {
+            background-color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            color: #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease;
+        }
+
+        #label-container div:hover {
+            background-color: rgba(255, 255, 255, 1);
+        }
+
+        /* 모바일 대응 */
+        @media (max-width: 600px) {
+            body {
+                background: linear-gradient(135deg, #ff8a00, #e52e71);
+                padding: 10px;
+            }
+
+            button {
+                padding: 10px 25px;
+                font-size: 1rem;
+            }
+
+            #label-container {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div>자세교정기</div>
+    <button type="button" onclick="init()">Start</button>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+    <div id="message-container"></div> <!-- 메시지 표시할 div 추가 -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        // More API functions here:
+        // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "https://teachablemachine.withgoogle.com/models/g4rrJrrO1/";
+
+        let model, webcam, labelContainer, maxPredictions, messageContainer;
+
+        // Load the image model and setup the webcam
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // load the model and metadata
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Setup webcam
+            const flip = true; // whether to flip the webcam
+            webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+            await webcam.setup(); // request access to the webcam
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // append elements to the DOM
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            messageContainer = document.getElementById("message-container");
+
+            for (let i = 0; i < maxPredictions; i++) { // and class labels
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update(); // update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        // run the webcam image through the image model
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            let highestPrediction = { className: "", probability: 0 };
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+
+                // Find the highest prediction
+                if (prediction[i].probability > highestPrediction.probability) {
+                    highestPrediction = {
+                        className: prediction[i].className,
+                        probability: prediction[i].probability
+                    };
+                }
+            }
+
+            // Show appropriate message based on the highest prediction
+            if (highestPrediction.className === "1" && highestPrediction.probability > 0.5) {
+                messageContainer.innerHTML = "<h2>바른자세</h2>";
+                messageContainer.style.color = "green"; // 바른 자세일 때 색상
+            } else if (highestPrediction.className === "2" && highestPrediction.probability > 0.5) {
+                messageContainer.innerHTML = "<h2>자세를 고치시오</h2>";
+                messageContainer.style.color = "red"; // 자세를 고쳐야 할 때 색상
+            } else {
+                messageContainer.innerHTML = "<h2>자세를 확인해주세요</h2>";
+                messageContainer.style.color = "yellow"; // 예측 확률이 0.5 미만일 때 색상
+            }
+        }
+    </script>
+</body>
+</html>
